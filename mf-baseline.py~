@@ -1,0 +1,96 @@
+import csv
+import numpy
+
+def learn_baseline_parameters(R, mu, BU, BI, steps=30, alpha=0.005, beta0=0.0002):
+    prev_cost = 100000000
+    for step in xrange(steps):
+        for i in xrange(len(R)):
+            for j in xrange(len(R[i])):
+                if R[i,j] > 0:
+                    eij = R[i,j] - predict(mu, BU[i], BI[j])
+ 		    BU[i]+=alpha*(eij)-beta0*BU[i]
+		    BI[j]+=alpha*(eij)-beta0*BI[j]		
+	
+	current_cost = cost(R, mu, BU, BI, beta0)
+	improvement = prev_cost - current_cost
+	print step, prev_cost, current_cost, improvement
+	prev_cost = current_cost
+	if improvement <0:
+            break
+
+
+def predict(mu, BUi, BIj):
+	return mu + BUi + BIj
+
+
+def cost(R, mu, BU, BI, beta0):
+	e = 0
+	for i in xrange(len(R)):
+	    for j in xrange(len(R[i])):
+		if R[i, j] > 0:
+		    e += (R[i, j] - predict(mu, BU[i], BI[j]))**2
+	e += beta0*(numpy.sum(BU**2) + numpy.sum(BI**2))
+	return e
+
+def load(file_name):
+    R = numpy.zeros((943, 1682))
+    reader = csv.reader(open(file_name),  delimiter='\t')
+    for i, row in enumerate(reader):
+	u, i, r = int(row[0]), int(row[1]), int(row[2])
+	R[u-1,i-1]=r
+    return R
+
+def rmse(R, mu, BU, BI):
+    e = 0
+    t = 0
+    for i in xrange(len(R)):
+	for j in xrange(len(R[i])):
+		if R[i, j] > 0:
+			t += 1
+			e += (R[i, j] - predict(mu, BU[i], BI[j]))**2
+    e/=t
+    e = numpy.sqrt(e)	
+    return e
+
+if __name__ == "__main__":
+    numpy.seterr(all='raise') 
+    R = load('ua.base')
+        
+    N = len(R)
+    M = len(R[0])
+	
+    mu = numpy.mean(R)
+    BU = mu - numpy.mean(R, axis=1)
+    BI = mu - numpy.mean(R, axis=0)
+
+    learn_baseline_parameters(R, mu, BU, BI)
+
+    print rmse(R, mu, BU, BI)
+    T = load('ua.test')
+    print rmse(T, mu, BU, BI)
+
+
+# steps=30, alpha=0.015, beta0=0
+# 0.918292053616
+# 0.965001050194
+
+# steps=30, alpha=0.015, beta0=0.001
+# 0.927614133333
+# 0.970254237131
+
+# steps=30, alpha=0.015, beta0=0.002
+# 0.950625549487
+# 0.988729181832
+
+# steps=30, alpha=0.015, beta0=0.0001
+# 0.918530873799
+# 0.96490419407
+
+# steps=30, alpha=0.015, beta0=0.0002
+# 0.918923606253
+# 0.964931140056
+
+# steps=30, alpha=0.005, beta0=0
+# 0.917501463831
+# 0.972987311746
+
