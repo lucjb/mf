@@ -2,33 +2,33 @@ import csv
 import numpy
 import math
 
-D = 2 ** 20
+D = 2 ** 18
 
 def hash_trick(x):
 	return abs(hash(x)) % D
 
-def matrix_factorization(file_name, K = 32, passes=50, gamma=0.015, lambda0=0.1):
-
-	P = numpy.float64(numpy.random.rand(D, K))
-	Q = numpy.float64(numpy.random.rand(K, D))
-	BU = [0]*D
-	BI = [0]*D
-
+def mean_rate(file_name):
 	ex_count = 0
 	f = open(file_name)
 	reader = csv.reader(f,  delimiter='\t')
 	r_sum = 0
 	for i, row in enumerate(reader):
 		u, i, r = hash_trick(int(row[0])), hash_trick(int(row[1])), int(row[2])
-		BU[u] += r/float(D)
-		BI[i] += r/float(D)
 		r_sum += r
 		ex_count += 1 	
 	mu = r_sum/float(ex_count)
 	f.close()
-
-	print 'Priors: %d' % mu
 	
+	return mu
+
+def matrix_factorization(file_name, K = 10, passes=20, gamma=0.015, lambda0=0.1):
+
+	P = numpy.float64(numpy.random.rand(D, K))
+	Q = numpy.float64(numpy.random.rand(K, D))
+	BU = [0]*D
+	BI = [0]*D
+
+	mu = mean_rate(file_name)
 	loss = 0
 	ex_count = 0
 	for pass_n in range(0, passes):
@@ -36,7 +36,9 @@ def matrix_factorization(file_name, K = 32, passes=50, gamma=0.015, lambda0=0.1)
 		reader = csv.reader(f,  delimiter='\t')
 		for i, row in enumerate(reader):
 			u, i, r = hash_trick(int(row[0])), hash_trick(int(row[1])), int(row[2])
+
 			eui = r - predict(mu, BU[u], BI[i], P[u,:], Q[:,i])
+
 			ex_count+=1
 			loss += eui**2
 
@@ -61,16 +63,10 @@ def predict(mu, BUi, BIj, Pi, Qj):
 	pred += numpy.dot(Pi, Qj)
 	return pred
 
-
-
-if __name__ == "__main__":
-	numpy.seterr(all='raise') 
-	
-	mu, BU, BI, P, Q = matrix_factorization('ua.base')
-	
+def validate(file_name, mu, BU, BI, P, Q):
 	loss = 0.
 	ex_count = 0.
-	f = open('ua.test')
+	f = open(file_name)
 	reader = csv.reader(f,  delimiter='\t')
 	r_sum = 0
 	for i, row in enumerate(reader):
@@ -83,7 +79,14 @@ if __name__ == "__main__":
 	RMSE = math.sqrt(MSE)
 	print 'Total Loss (SE): %f, mean loss (MSE): %f, RMSE: %f' %(loss, MSE, RMSE)
 
-# steps=50, alpha=0.015, beta0=0.0001, beta1=0.1, k=32
-# 0.687426219807
-# 0.94677112744
+
+if __name__ == "__main__":
+	numpy.seterr(all='raise')
+	mu, BU, BI, P, Q = matrix_factorization('ua.base')
+	validate('ua.test', mu, BU, BI, P, Q)	
+	validate('ub.test', mu, BU, BI, P, Q)	
+
+# K = 10, passes=20, gamma=0.015, lambda0=0.1):
+#Total Loss (SE): 8497.244551, mean loss (MSE): 0.901086, RMSE: 0.949256
+
 
