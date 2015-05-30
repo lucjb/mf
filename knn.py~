@@ -1,0 +1,99 @@
+import csv
+import numpy
+
+def matrix_factorization(R, mu, BU, BI, W, C, steps=1, gamma=0.015, lambda4=1):
+    prev_cost = 100000000
+    for step in xrange(steps):
+        for u in xrange(len(R)):
+            for i in xrange(len(R[u])):
+                if R[u,i] > 0:
+                    eui = R[u,i] - predict(u, i, mu, BU, BI, W, C, R)
+ 
+		    Ru = R[u,:]
+		    cardRu_factor = 1./numpy.sqrt(sum(Ru>0))
+	   	    for j in xrange(len(Ru)):
+			if Ru[j]>0:
+				Buj = mu + BU[u] + BI[j]
+				W[i,j] += gamma*(cardRu_factor*eui*(Ru[j]-Buj) - lambda4*W[i,j])
+				C[i,j] += gamma*(cardRu_factor*eui - lambda4*C[i,j])	
+	
+		    BU[u]+=gamma*(eui)-lambda4*BU[u]
+		    BI[i]+=gamma*(eui)-lambda4*BI[i]	
+
+	
+	cost = e(R, mu, BU, BI, W, C, lambda4)
+	improvement = prev_cost - cost
+	print step, prev_cost, cost, improvement
+	prev_cost = cost
+	if improvement <0:
+            break
+
+
+def predict(u, i, mu, BU, BI, W, C, R):
+	pred = 0
+	baseline = mu + BU[u] + BI[i]
+	pred += baseline
+	Ru = R[u,:]
+    	cardRu_factor = 1./numpy.sqrt(sum(Ru>0))
+    	for j in xrange(len(Ru)):
+		if Ru[j]>0:
+			Buj = mu + BU[u] + BI[j]
+			pred+=cardRu_factor*(Ru[j]-Buj)*W[i,j]
+			pred+=cardRu_factor*C[i,j]		
+
+	return pred
+
+
+def e(R, mu, BU, BI, W, C, lambda4):
+	e = 0
+	for u in xrange(len(R)):
+	    for i in xrange(len(R[i])):
+		if R[u, i] > 0:
+		    e += (R[u, i] - predict(u, i, mu, BU, BI, W, C))**2
+		    e += lamnda4 * (BU[u]**2 +BI[i]**2 + sum(W[i]**2) +sum(C[i]**2))
+	return e
+
+def load(file_name):
+    R = numpy.zeros((943, 1682))
+    reader = csv.reader(open(file_name),  delimiter='\t')
+    for i, row in enumerate(reader):
+	u, i, r = int(row[0]), int(row[1]), int(row[2])
+	R[u-1,i-1]=r
+    return R
+
+def rmse(R, mu, BU, BI, P, Q):
+    e = 0
+    t = 0
+    for i in xrange(len(R)):
+	for j in xrange(len(R[i])):
+		if R[i, j] > 0:
+			t += 1
+			e += (R[i, j] - predict(mu, BU[i], BI[j], P[i,:], Q[:,j]))**2
+    e/=t
+    e = numpy.sqrt(e)	
+    return e
+
+if __name__ == "__main__":
+    numpy.seterr(all='raise') 
+    R = load('ua.base')
+        
+    N = len(R)
+    M = len(R[0])
+	
+    mu = numpy.mean(R)
+    BU = mu - numpy.mean(R, axis=1)
+    BI = mu - numpy.mean(R, axis=0)
+
+    W = numpy.float64(numpy.random.rand(M,M))
+    C = numpy.float64(numpy.random.rand(M,M))
+
+    matrix_factorization(R, mu, BU, BI, W, C)
+
+    print rmse(R, mu, BU, BI, P, Q.T)
+    T = load('ua.test')
+    print rmse(T, mu, BU, BI, P, Q.T)
+
+# steps=50, alpha=0.015, beta0=0.0001, beta1=0.1, k=32
+# 0.687426219807
+# 0.94677112744
+

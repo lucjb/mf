@@ -1,52 +1,56 @@
 import csv
 import numpy
 
-def matrix_factorization(R, mu, BU, BI, P, Q, K, steps=40, gamma=0.015, lambda0=0.1):
-    Q = Q.T
+def matrix_factorization(R, mu, BU, BI, W, C, steps=1, gamma=0.015, lambda4=1):
     prev_cost = 100000000
-    ex_count = 0
-    loss = 0
     for step in xrange(steps):
         for u in xrange(len(R)):
             for i in xrange(len(R[u])):
                 if R[u,i] > 0:
-		    ex_count+=1
-                    eui = R[u,i] - predict(mu, BU[u], BI[i], P[u,:], Q[:,i])
-		    loss += eui**2
-
- 		    BU[u]+=gamma*(eui-lambda0*BU[u])
-		    BI[i]+=gamma*(eui-lambda0*BI[i])	
-
-		    puo = P[u,:]
-		    qio = Q[:,i]
-
-                    P[u,:]+=gamma*(eui*qio - lambda0*puo)
-    		    Q[:,i]+=gamma*(eui*puo - lambda0*qio)
+                    eui = R[u,i] - predict(u, i, mu, BU, BI, W, C, R)
+ 
+		    Ru = R[u,:]
+		    cardRu_factor = 1./numpy.sqrt(sum(Ru>0))
+	   	    for j in xrange(len(Ru)):
+			if Ru[j]>0:
+				Buj = mu + BU[u] + BI[j]
+				W[i,j] += gamma*(cardRu_factor*eui*(Ru[j]-Buj) - lambda4*W[i,j])
+				C[i,j] += gamma*(cardRu_factor*eui - lambda4*C[i,j])	
 	
-#	cost = e(R, mu, BU, BI, P, Q, K, lambda0)
-#	improvement = prev_cost - cost
-#	print step, prev_cost, cost, improvement
-	print step, loss/float(ex_count)
+		    BU[u]+=gamma*(eui)-lambda4*BU[u]
+		    BI[i]+=gamma*(eui)-lambda4*BI[i]	
+
+	
+	cost = e(R, mu, BU, BI, W, C, lambda4)
+	improvement = prev_cost - cost
+	print step, prev_cost, cost, improvement
 	prev_cost = cost
 	if improvement <0:
             break
 
 
-def predict(mu, BUi, BIj, Pi, Qj):
+def predict(u, i, mu, BU, BI, W, C, R):
 	pred = 0
-	baseline = mu + BUi + BIj
+	baseline = mu + BU[u] + BI[i]
 	pred += baseline
-	pred += numpy.dot(Pi, Qj)
+	Ru = R[u,:]
+    	cardRu_factor = 1./numpy.sqrt(sum(Ru>0))
+    	for j in xrange(len(Ru)):
+		if Ru[j]>0:
+			Buj = mu + BU[u] + BI[j]
+			pred+=cardRu_factor*(Ru[j]-Buj)*W[i,j]
+			pred+=cardRu_factor*C[i,j]		
+
 	return pred
 
 
-def e(R, mu, BU, BI, P, Q, K, lambda0):
+def e(R, mu, BU, BI, W, C, lambda4):
 	e = 0
 	for u in xrange(len(R)):
 	    for i in xrange(len(R[u])):
-		if R[u,i] > 0:
-		    e += (R[u,i] - predict(mu, BU[u], BI[i], P[u,:], Q[:,i]))**2
-		    e += lambda0 * (numpy.sum(P[u,:]**2 + Q[:,i]**2) + BU[u]**2 + BI[i]**2)
+		if R[u, i] > 0:
+		    e += (R[u, i] - predict(u, i, mu, BU, BI, W, C))**2
+		    e += lamnda4 * (BU[u]**2 +BI[i]**2 + sum(W[i]**2) +sum(C[i]**2))
 	return e
 
 def load(file_name):
@@ -80,11 +84,10 @@ if __name__ == "__main__":
     BU = mu - numpy.mean(R, axis=1)
     BI = mu - numpy.mean(R, axis=0)
 
-    K = 32
-    P = numpy.float64(numpy.random.rand(N,K))
-    Q = numpy.float64(numpy.random.rand(M,K))
+    W = numpy.float64(numpy.random.rand(M,M))
+    C = numpy.float64(numpy.random.rand(M,M))
 
-    matrix_factorization(R, mu, BU, BI, P, Q, K)
+    matrix_factorization(R, mu, BU, BI, W, C)
 
     print rmse(R, mu, BU, BI, P, Q.T)
     T = load('ua.test')
