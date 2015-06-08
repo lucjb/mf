@@ -109,15 +109,22 @@ def validate(file_name, mu, BU, BI, P, Q, B):
     ex_count = 0.
     f = open(file_name)
     reader = csv.reader(f, delimiter='\t')
+    all_ones_loss = 0
     for row in reader:
         u, i, r = hash_trick(int(row[0]), D), hash_trick(int(row[1]), D), float(row[2])
-        eui = r - predict(mu, BU[u], BI[i], P[u, :], Q[:, i])
+        r_hat = predict(mu, BU[u], BI[i], P[u, :], Q[:, i])
+        eui = r - r_hat
         loss += eui ** 2
+        all_ones_loss += (1-r_hat)**2
         ex_count += 1
     f.close()
     MSE = loss / float(ex_count)
     RMSE = math.sqrt(MSE)
-    print 'Total Loss (SE): %f, mean loss (MSE): %f, RMSE: %f' % (loss, MSE, RMSE)
+
+    all_ones_MSE = all_ones_loss/float(ex_count)
+    all_ones_RMSE = math.sqrt(all_ones_MSE)
+    print 'MF:                 Total Loss (SE): %f, mean loss (MSE): %f, RMSE: %f' % (loss, MSE, RMSE)
+    print 'All ones benchmark: Total Loss (SE): %f, mean loss (MSE): %f, RMSE: %f' % (all_ones_loss, all_ones_MSE, all_ones_RMSE)
 
 
 def persist_model(model_file_name, B, K, mu, BU, BI, P, Q, users, items):
