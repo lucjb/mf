@@ -30,8 +30,7 @@ def mean_rate(file_name):
     return mu, users, items
 
 
-def matrix_factorization(file_name, K, passes, gamma, lambda0, B):
-    alpha = 0.5
+def matrix_factorization(file_name, K, passes, gamma, lambda0, B, alpha):
     D = 2 ** B
     P = numpy.float64(numpy.random.rand(D, K))
     Q = numpy.float64(numpy.random.rand(K, D))
@@ -44,6 +43,11 @@ def matrix_factorization(file_name, K, passes, gamma, lambda0, B):
         BU[i] = random.random()
         BI[i] = random.random()
 
+
+    prev_delta_BU = [0.] * D
+    prev_delta_BI = [0.] * D
+    prev_delta_P = numpy.zeros((D,K))
+    prev_delta_Q = numpy.zeros((K,D))
 
     loss = 0
     ex_count = 0
@@ -58,35 +62,46 @@ def matrix_factorization(file_name, K, passes, gamma, lambda0, B):
             ex_count += 1
             loss += eui ** 2
 
-            grad_Bu, grad_Bi = eui - lambda0 * BU[u], eui - lambda0 * BI[i]
+            grad_BU_u = -(eui - lambda0 * BU[u])
+            grad_BI_i = -(eui - lambda0 * BI[i])
 
-            BU[u] += gamma * grad_Bu
-            BI[i] += gamma * grad_Bi
+            delta_BU_u = -(1-alpha)*gamma*grad_BU_u + alpha*prev_delta_BU[u]
+            delta_BI_i = -(1-alpha)*gamma*grad_BI_i + alpha*prev_delta_BI[i]
+
+            BU[u] += delta_BU_u
+            BI[i] += delta_BI_i
+
+            prev_delta_BU[u] = delta_BU_u
+            prev_delta_BI[i] = delta_BI_i
 
             puo = P[u, :]
             qio = Q[:, i]
+            grad_P_u = -(eui * qio - lambda0 * puo)
+            grad_Q_i = -(eui * puo - lambda0 * qio)
 
-            P[u, :] += gamma * (eui * qio - lambda0 * puo)
-            Q[:, i] += gamma * (eui * puo - lambda0 * qio)
+            delta_P_u = -(1-alpha)*gamma*grad_P_u + alpha*prev_delta_P[u,:]
+            delta_Q_i = -(1-alpha)*gamma*grad_Q_i + alpha*prev_delta_Q[:,i]
+
+            P[u, :] += delta_P_u
+            Q[:, i] += delta_Q_i
+
+            prev_delta_P[u,:] = delta_P_u
+            prev_delta_Q[:,i] = delta_Q_i
+
 
             if ex_count % 10000 == 0:
                 print loss / float(ex_count), eui**2
 
+
         f.close()
     return mu, BU, BI, P, Q, users, items
-
-
-def clip(x, lb, ub):
-    if x < lb:return lb
-    if x> ub: return ub
-    return x
 
 def predict(mu, BUi, BIj, Pi, Qj):
     pred = 0
     baseline = mu + BUi + BIj
     pred += baseline
     pred += numpy.dot(Pi, Qj)
-    return clip(pred, 0, 1)
+    return pred
 
 def validate(file_name, mu, BU, BI, P, Q, B):
     D = 2 ** B
@@ -142,13 +157,14 @@ if __name__ == "__main__":
     parser.add_argument('-passes', help='Input file passes, default 1', default=1, dest='passes', type=int)
     parser.add_argument('-model', help='Model file name', dest='model_file_name')
     parser.add_argument('-predict', help='Prediction file. CSV: user, item.', dest='pred_file_name')
+    parser.add_argument('-alpha', help='Momentum weigh. [0,1]. Defualt: 0.5', default=0.5, dest='alpha', type=float)
 
     args = parser.parse_args()
-    input_file, K, passes, gamma, lambda0, B, model_file_name, pred_file_name= args.input_file, args.K, args.passes, args.gamma, args.lambda0, args.b, args.model_file_name, args.pred_file_name
+    input_file, K, passes, gamma, lambda0, B, model_file_name, pred_file_name, alpha= args.input_file, args.K, args.passes, args.gamma, args.lambda0, args.b, args.model_file_name, args.pred_file_name, args.alpha
 
     numpy.seterr(all='raise')
 
-    mu, BU, BI, P, Q, users, items = matrix_factorization(input_file, K, passes, gamma, lambda0, B)
+    mu, BU, BI, P, Q, users, items = matrix_factorization(input_file, K, passes, gamma, lambda0, B, alpha)
 
     if model_file_name:
         persist_model(model_file_name, B, K, mu, BU, BI, P, Q, users, items)
@@ -174,3 +190,4 @@ ub.test Total Loss (SE): 6243.402562, mean loss (MSE): 0.662079, RMSE: 0.813682
 
 ''' 
 
+#python online-mf.py -d /home/lbernardi/code/lbernardi/destRecom/mf-train.tsv -passes 1 -k 10 -predict /home/lbernardi/code/lbernardi/destRecom/mf-test.tsv -l2 1 -gamma 0.2
